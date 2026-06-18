@@ -1,0 +1,1498 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Markdown 对齐浏览器</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #e1e5ea;
+      --text: #1f2933;
+      --muted: #667085;
+      --accent: #2563eb;
+      --accent-soft: #e8f0ff;
+      --code-bg: #f3f4f6;
+      --quote-bg: #f6f9ff;
+      --heading-bg: #eef5ff;
+      --table-bg: #f8fbff;
+      --hr: #c7d2e5;
+      --green: #16803c;
+      --row-h: 24px;
+      --sidebar-w: 268px;
+      --left-w: 50%;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    button {
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 12px;
+      color: var(--text);
+      background: var(--panel);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: #b9c2d0;
+      background: #f9fafb;
+    }
+
+    button.primary {
+      color: #fff;
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    button.primary:hover {
+      background: #1d4ed8;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      width: 100%;
+      height: 100%;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .toolbar-spacer {
+      flex: 1;
+      min-width: 12px;
+    }
+
+    .file-title {
+      min-width: 0;
+      max-width: 42vw;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      min-height: 0;
+    }
+
+    .workspace.sidebar-hidden {
+      grid-template-columns: 0 1fr;
+    }
+
+    .sidebar {
+      min-width: 0;
+      overflow: hidden;
+      border-right: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .sidebar-inner {
+      display: grid;
+      grid-template-rows: 40px 1fr;
+      width: var(--sidebar-w);
+      height: 100%;
+    }
+
+    .sidebar-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .file-count {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: #475467;
+      font-size: 12px;
+    }
+
+    .file-list {
+      min-height: 0;
+      margin: 0;
+      padding: 6px;
+      overflow: auto;
+      list-style: none;
+    }
+
+    .file-item {
+      display: block;
+      width: 100%;
+      min-height: 30px;
+      border: 0;
+      border-radius: 6px;
+      padding: 6px 8px;
+      overflow: hidden;
+      color: #344054;
+      background: transparent;
+      text-align: left;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .file-item:hover {
+      background: #eef2f7;
+    }
+
+    .file-item.active {
+      color: #174ea6;
+      background: var(--accent-soft);
+      font-weight: 600;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(260px, var(--left-w)) 8px minmax(260px, 1fr);
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .pane {
+      display: grid;
+      grid-template-rows: 36px 1fr;
+      min-width: 0;
+      min-height: 0;
+      background: var(--panel);
+    }
+
+    .pane-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .pane-body {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      background: var(--panel);
+    }
+
+    .source-body {
+      font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+      font-size: 14px;
+    }
+
+    .preview-body {
+      font-size: 14px;
+    }
+
+    .line {
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      height: var(--row-h);
+      line-height: var(--row-h);
+      border-bottom: 1px solid rgba(225, 229, 234, 0.55);
+      white-space: pre;
+    }
+
+    .line.auto-height {
+      height: auto;
+      min-height: var(--row-h);
+    }
+
+    .line-no {
+      padding: 0 8px;
+      color: #98a2b3;
+      background: #f8fafc;
+      text-align: right;
+      user-select: none;
+    }
+
+    .line-text {
+      min-width: 0;
+      padding: 0 12px;
+      overflow: hidden;
+      white-space: pre;
+      text-overflow: clip;
+    }
+
+    .line.auto-height .line-text {
+      white-space: pre-wrap;
+      overflow: visible;
+      line-height: 20px;
+      padding-top: 2px;
+      padding-bottom: 2px;
+    }
+
+    .preview-line {
+      position: relative;
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      height: var(--row-h);
+      line-height: var(--row-h);
+      border-bottom: 1px solid rgba(225, 229, 234, 0.55);
+      white-space: nowrap;
+    }
+
+    .preview-line.auto-height {
+      height: auto;
+      min-height: var(--row-h);
+      line-height: 20px;
+      white-space: normal;
+    }
+
+    .preview-text {
+      display: block;
+      min-width: 0;
+      height: var(--row-h);
+      padding: 0 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .auto-height .preview-text {
+      height: auto;
+      min-height: var(--row-h);
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    /* Markdown object rendering layer. Each source line keeps the same 24px
+       height, while object classes change only the visual treatment. */
+    .md-heading .preview-text {
+      border-left: 4px solid #3b82f6;
+      background: linear-gradient(90deg, var(--heading-bg), transparent 72%);
+    }
+
+    .md-h1 .preview-text,
+    .md-h2 .preview-text,
+    .md-h3 .preview-text,
+    .md-h4 .preview-text,
+    .md-h5 .preview-text,
+    .md-h6 .preview-text {
+      color: #111827;
+      font-weight: 700;
+    }
+
+    .md-h1 .preview-text {
+      font-size: 18px;
+    }
+
+    .md-h2 .preview-text {
+      font-size: 16px;
+    }
+
+    .md-h3 .preview-text {
+      font-size: 15px;
+    }
+
+    .md-h4 .preview-text,
+    .md-h5 .preview-text,
+    .md-h6 .preview-text {
+      font-size: 14px;
+    }
+
+    .md-quote .preview-text {
+      border-left: 3px solid #84a9ff;
+      padding-left: 10px;
+      color: #38506f;
+      background: var(--quote-bg);
+    }
+
+    .md-list .preview-text {
+      color: #24364f;
+    }
+
+    .md-task-done .preview-text {
+      color: #667085;
+    }
+
+    .task-box {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border: 1px solid #9aa8ba;
+      border-radius: 4px;
+      margin-right: 6px;
+      color: transparent;
+      background: #fff;
+      vertical-align: text-bottom;
+    }
+
+    .md-task-done .task-box {
+      border-color: var(--green);
+      color: #fff;
+      background: var(--green);
+    }
+
+    .bullet {
+      display: inline-block;
+      width: 14px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .ordered-no {
+      display: inline-block;
+      min-width: 24px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .md-code .preview-text,
+    .md-fence .preview-text {
+      font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+      color: #344054;
+      background: var(--code-bg);
+    }
+
+    .md-code.preview-line,
+    .md-fence.preview-line {
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .md-code .preview-text,
+    .md-fence .preview-text {
+      white-space: pre;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .md-diagram.preview-line {
+      grid-template-columns: 54px var(--diagram-width);
+      width: calc(54px + var(--diagram-width));
+      min-width: 100%;
+      background: #f5f7fb;
+    }
+
+    .md-diagram-anchor {
+      z-index: 5;
+    }
+
+    .md-diagram-ghost {
+      z-index: 1;
+    }
+
+    .md-diagram .preview-text {
+      position: relative;
+      padding: 0;
+      overflow: visible;
+      background: #f5f7fb;
+    }
+
+    .diagram-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: var(--diagram-width);
+      height: var(--diagram-height);
+      overflow: hidden;
+      background:
+        linear-gradient(#e9eef5 1px, transparent 1px),
+        linear-gradient(90deg, #e9eef5 1px, transparent 1px),
+        #f5f7fb;
+      background-size: 24px 24px, 24px 24px, auto;
+    }
+
+    .diagram-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .diagram-node {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 112px;
+      border: 1px solid #7aa2d6;
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #0f2a4a;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 42, 74, 0.12);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      font-size: 13px;
+      line-height: 19px;
+      text-align: center;
+      white-space: normal;
+    }
+
+    .diagram-node-line {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .diagram-node-line:first-child {
+      font-weight: 700;
+    }
+
+    .diagram-label {
+      position: absolute;
+      padding: 1px 6px;
+      border-radius: 999px;
+      color: #23415f;
+      background: rgba(255, 255, 255, 0.86);
+      font-size: 12px;
+      line-height: 18px;
+      white-space: nowrap;
+      transform: translate(-50%, -50%);
+    }
+
+    .md-fence .preview-text {
+      color: #175cd3;
+      font-weight: 600;
+    }
+
+    .md-empty .preview-text {
+      color: transparent;
+    }
+
+    .md-table.preview-line {
+      grid-template-columns: 54px var(--table-min-width);
+      width: calc(54px + var(--table-min-width));
+      min-width: 100%;
+    }
+
+    .md-table .line-no {
+      background: #f3f7fb;
+    }
+
+    .md-table .preview-text {
+      display: grid;
+      grid-template-columns: var(--table-cols);
+      width: var(--table-min-width);
+      min-width: var(--table-min-width);
+      padding: 0;
+      overflow: visible;
+      color: #344054;
+      background: var(--table-bg);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    .md-table-separator .preview-text {
+      background: #f1f5f9;
+    }
+
+    .md-table-header .preview-text {
+      color: #18324d;
+      background: #eef6ff;
+      font-weight: 700;
+    }
+
+    .table-cell {
+      min-width: 0;
+      border-right: 1px solid #d8e0ea;
+      padding: 2px 9px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 20px;
+      vertical-align: top;
+    }
+
+    .table-cell:first-child {
+      border-left: 1px solid #d8e0ea;
+    }
+
+    .md-table-separator .table-cell {
+      color: transparent;
+      border-top: 1px solid #b8c7da;
+      border-bottom: 1px solid #d8e0ea;
+    }
+
+    .md-hr .preview-text {
+      position: relative;
+      color: transparent;
+    }
+
+    .md-hr .preview-text::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 14px;
+      right: 14px;
+      height: 1px;
+      background: var(--hr);
+    }
+
+    .md-frontmatter .preview-text {
+      color: #6941c6;
+      background: #f4f3ff;
+      font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+    }
+
+    .inline-code {
+      border-radius: 4px;
+      padding: 1px 4px;
+      background: var(--code-bg);
+      font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+    }
+
+    .token-strong {
+      font-weight: 700;
+    }
+
+    .token-em {
+      font-style: italic;
+    }
+
+    .token-link {
+      color: #175cd3;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      height: 20px;
+      border: 1px solid #cfd8e3;
+      border-radius: 999px;
+      padding: 0 8px;
+      color: #475467;
+      background: #f8fafc;
+      vertical-align: middle;
+    }
+
+    .image-tag {
+      border-color: #bae6fd;
+      color: #075985;
+      background: #e0f2fe;
+    }
+
+    .resizer {
+      position: relative;
+      background: #edf1f6;
+      cursor: col-resize;
+    }
+
+    .resizer::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 2px;
+      height: 36px;
+      border-radius: 2px;
+      background: #aab4c3;
+      transform: translate(-50%, -50%);
+    }
+
+    .resizer:hover,
+    .resizer.dragging {
+      background: #dbe7ff;
+    }
+
+    .empty-state,
+    .drop-mask {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: var(--muted);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .drop-mask {
+      z-index: 20;
+      display: none;
+      border: 2px dashed var(--accent);
+      color: #174ea6;
+      background: rgba(232, 240, 255, 0.88);
+      font-weight: 600;
+    }
+
+    .app.drag-over .drop-mask {
+      display: flex;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 860px) {
+      :root {
+        --sidebar-w: 220px;
+      }
+
+      .split {
+        grid-template-columns: minmax(180px, var(--left-w)) 8px minmax(180px, 1fr);
+      }
+
+      .file-title {
+        max-width: 24vw;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="app">
+    <div class="toolbar">
+      <button id="toggleSidebarBtn" title="显示或隐藏文件列表">文件列表</button>
+      <button id="openFileBtn" class="primary">打开文件</button>
+      <button id="openFolderBtn">打开文件夹</button>
+      <button id="clearBtn">清空</button>
+      <div class="toolbar-spacer"></div>
+      <div id="fileTitle" class="file-title">拖入 .md 文件或文件夹开始浏览</div>
+    </div>
+
+    <div id="workspace" class="workspace">
+      <aside class="sidebar">
+        <div class="sidebar-inner">
+          <div class="sidebar-head">
+            <span>Markdown 文件</span>
+            <span id="fileCount" class="file-count">0</span>
+          </div>
+          <ul id="fileList" class="file-list"></ul>
+        </div>
+      </aside>
+
+      <main id="split" class="split">
+        <section class="pane">
+          <div class="pane-head">原始 Markdown</div>
+          <div id="sourceBody" class="pane-body source-body">
+            <div id="sourceLines"></div>
+            <div id="sourceEmpty" class="empty-state">未加载内容</div>
+          </div>
+        </section>
+
+        <div id="resizer" class="resizer" title="拖动调整左右宽度"></div>
+
+        <section class="pane">
+          <div class="pane-head">对齐优化视图</div>
+          <div id="previewBody" class="pane-body preview-body">
+            <div id="previewLines"></div>
+            <div id="previewEmpty" class="empty-state">右侧按源行对齐显示，不修改原文</div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="drop-mask">释放后加载 Markdown 文件或文件夹</div>
+  </div>
+
+  <input id="fileInput" class="hidden" type="file" accept=".md,.markdown,text/markdown,text/plain" multiple>
+  <input id="dirInput" class="hidden" type="file" webkitdirectory multiple>
+
+  <script>
+    const app = document.getElementById("app");
+    const workspace = document.getElementById("workspace");
+    const split = document.getElementById("split");
+    const sourceBody = document.getElementById("sourceBody");
+    const previewBody = document.getElementById("previewBody");
+    const sourceLines = document.getElementById("sourceLines");
+    const previewLines = document.getElementById("previewLines");
+    const sourceEmpty = document.getElementById("sourceEmpty");
+    const previewEmpty = document.getElementById("previewEmpty");
+    const fileList = document.getElementById("fileList");
+    const fileCount = document.getElementById("fileCount");
+    const fileTitle = document.getElementById("fileTitle");
+    const fileInput = document.getElementById("fileInput");
+    const dirInput = document.getElementById("dirInput");
+    const openFileBtn = document.getElementById("openFileBtn");
+    const openFolderBtn = document.getElementById("openFolderBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const toggleSidebarBtn = document.getElementById("toggleSidebarBtn");
+    const resizer = document.getElementById("resizer");
+
+    const ROW_HEIGHT = 24;
+    const markdownFiles = [];
+    let activeId = null;
+    let syncLock = false;
+    let dragDepth = 0;
+
+    function isMarkdownFile(file) {
+      const name = file.name.toLowerCase();
+      return name.endsWith(".md") || name.endsWith(".markdown");
+    }
+
+    function normalizePath(path) {
+      return (path || "").replaceAll("\\", "/").replace(/^\/+/, "");
+    }
+
+    function fileRecord(file, path) {
+      return {
+        id: `${normalizePath(path || file.webkitRelativePath || file.name)}::${file.size}::${file.lastModified}`,
+        name: file.name,
+        path: normalizePath(path || file.webkitRelativePath || file.name),
+        file,
+        text: null
+      };
+    }
+
+    function setFiles(records) {
+      const seen = new Set(markdownFiles.map(item => item.id));
+      for (const record of records) {
+        if (!seen.has(record.id)) {
+          markdownFiles.push(record);
+          seen.add(record.id);
+        }
+      }
+      markdownFiles.sort((a, b) => a.path.localeCompare(b.path, "zh-CN"));
+      renderFileList();
+      if (!activeId && markdownFiles.length > 0) {
+        openRecord(markdownFiles[0].id);
+      } else if (records.length > 0 && markdownFiles.length > 0) {
+        openRecord(records[0].id);
+      }
+      if (records.length === 0) {
+        fileTitle.textContent = "没有找到 Markdown 文件";
+      }
+    }
+
+    function renderFileList() {
+      fileList.innerHTML = "";
+      fileCount.textContent = String(markdownFiles.length);
+      const fragment = document.createDocumentFragment();
+      for (const record of markdownFiles) {
+        const li = document.createElement("li");
+        const button = document.createElement("button");
+        button.className = `file-item${record.id === activeId ? " active" : ""}`;
+        button.type = "button";
+        button.title = record.path;
+        button.textContent = record.path;
+        button.addEventListener("click", () => openRecord(record.id));
+        li.appendChild(button);
+        fragment.appendChild(li);
+      }
+      fileList.appendChild(fragment);
+    }
+
+    function readFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file, "utf-8");
+      });
+    }
+
+    async function openRecord(id) {
+      const record = markdownFiles.find(item => item.id === id);
+      if (!record) return;
+      activeId = id;
+      renderFileList();
+      if (record.text === null) {
+        record.text = await readFile(record.file);
+      }
+      fileTitle.textContent = record.path;
+      renderDocument(record.text);
+    }
+
+    function renderDocument(text) {
+      const normalized = text.replace(/\r\n?/g, "\n");
+      const lines = normalized.length ? normalized.split("\n") : [];
+      sourceBody.scrollTop = 0;
+      previewBody.scrollTop = 0;
+      sourceLines.innerHTML = "";
+      previewLines.innerHTML = "";
+      sourceEmpty.classList.toggle("hidden", lines.length > 0);
+      previewEmpty.classList.toggle("hidden", lines.length > 0);
+      sourceLines.appendChild(renderSource(lines));
+      previewLines.appendChild(renderPreview(lines));
+      requestAnimationFrame(syncRowHeights);
+    }
+
+    function renderSource(lines) {
+      const fragment = document.createDocumentFragment();
+      lines.forEach((line, index) => {
+        const row = document.createElement("div");
+        row.className = "line";
+        row.style.height = `${ROW_HEIGHT}px`;
+        row.innerHTML = `<span class="line-no">${index + 1}</span><span class="line-text"></span>`;
+        row.lastElementChild.textContent = line || " ";
+        fragment.appendChild(row);
+      });
+      return fragment;
+    }
+
+    function renderPreview(lines) {
+      const fragment = document.createDocumentFragment();
+      let inFence = false;
+      let inFrontmatter = false;
+      const tableMeta = buildTableMeta(lines);
+      const diagramMeta = buildDiagramMeta(lines);
+      lines.forEach((line, index) => {
+        if (index === 0 && /^\s*---\s*$/.test(line)) {
+          inFrontmatter = true;
+        }
+        const parsed = parseLine(line, { inFence, inFrontmatter, index, table: tableMeta.get(index), diagram: diagramMeta.get(index) });
+        if (inFrontmatter && index > 0 && /^\s*(---|\.\.\.)\s*$/.test(line)) {
+          inFrontmatter = false;
+        }
+        if (/^\s*```/.test(line) || /^\s*~~~/.test(line)) {
+          inFence = !inFence;
+        }
+        const row = document.createElement("div");
+        row.className = `preview-line ${parsed.className}${parsed.autoHeight ? " auto-height" : ""}`;
+        if (!parsed.autoHeight) row.style.height = `${ROW_HEIGHT}px`;
+        if (parsed.tableCols) row.style.setProperty("--table-cols", parsed.tableCols);
+        if (parsed.tableMinWidth) row.style.setProperty("--table-min-width", parsed.tableMinWidth);
+        if (parsed.diagramWidth) row.style.setProperty("--diagram-width", parsed.diagramWidth);
+        if (parsed.diagramHeight) row.style.setProperty("--diagram-height", parsed.diagramHeight);
+        row.innerHTML = `<span class="line-no">${index + 1}</span><span class="preview-text">${parsed.html || "&nbsp;"}</span>`;
+        fragment.appendChild(row);
+      });
+      return fragment;
+    }
+
+    function buildDiagramMeta(lines) {
+      const meta = new Map();
+      let index = 0;
+      while (index < lines.length) {
+        if (!/^\s*(```|~~~)/.test(lines[index])) {
+          index += 1;
+          continue;
+        }
+
+        const fence = lines[index].trim().slice(0, 3);
+        const start = index;
+        index += 1;
+        const contentStart = index;
+        const block = [];
+        while (index < lines.length && !lines[index].trim().startsWith(fence)) {
+          block.push(lines[index]);
+          index += 1;
+        }
+        const end = index < lines.length ? index : index - 1;
+        index += 1;
+
+        if (!looksLikeAsciiDiagram(block)) continue;
+        const diagram = buildAsciiDiagram(block);
+        if (!diagram || diagram.nodes.length === 0) continue;
+
+        const blockLength = Math.max(1, end - start + 1);
+        for (let row = start; row <= end; row += 1) {
+          meta.set(row, {
+            role: row === start ? "anchor" : "ghost",
+            html: row === start ? diagram.html : "&nbsp;",
+            width: diagram.width,
+            height: Math.max(diagram.height, blockLength * ROW_HEIGHT),
+            className: row === start ? "md-diagram md-diagram-anchor" : "md-diagram md-diagram-ghost"
+          });
+        }
+      }
+      return meta;
+    }
+
+    function looksLikeAsciiDiagram(lines) {
+      const text = lines.join("\n");
+      return /[┌┐└┘│─═╔╗╚╝║╟╢╤╧╪▼▲◀▶←→↔]/.test(text) && /[┌╔].*[┐╗]/.test(text) && /[└╚].*[┘╝]/.test(text);
+    }
+
+    function buildAsciiDiagram(lines) {
+      const charWidth = 8.6;
+      const rowHeight = ROW_HEIGHT;
+      const pad = 18;
+      const maxLen = Math.max(...lines.map(line => line.length), 1);
+      const nodes = extractDiagramNodes(lines, charWidth, rowHeight, pad);
+      if (nodes.length === 0) return null;
+      const width = Math.max(Math.ceil(maxLen * charWidth + pad * 2), Math.max(...nodes.map(node => node.x + node.w + pad)));
+      const height = Math.max(lines.length * rowHeight, Math.max(...nodes.map(node => node.y + node.h + pad)));
+      const connectors = extractDiagramConnectors(lines, nodes, charWidth, rowHeight, pad);
+      const svg = renderDiagramSvg(connectors, width, height);
+      const labels = connectors
+        .filter(connector => connector.label)
+        .map(connector => `<span class="diagram-label" style="left:${connector.labelX}px;top:${connector.labelY}px">${escapeHtml(connector.label)}</span>`)
+        .join("");
+      const nodeHtml = nodes.map(node => {
+        const linesHtml = node.text.map(line => `<span class="diagram-node-line" title="${escapeAttr(line)}">${escapeHtml(line)}</span>`).join("");
+        return `<div class="diagram-node" style="left:${node.x}px;top:${node.y}px;width:${node.w}px;height:${node.h}px">${linesHtml}</div>`;
+      }).join("");
+      return {
+        width: `${width}px`,
+        height: `${height}px`,
+        nodes,
+        html: `<div class="diagram-canvas">${svg}${labels}${nodeHtml}</div>`
+      };
+    }
+
+    function extractDiagramNodes(lines, charWidth, rowHeight, pad) {
+      const nodes = [];
+      const seen = new Set();
+      lines.forEach((line, y) => {
+        for (let x1 = 0; x1 < line.length; x1 += 1) {
+          if (!/[┌╔]/.test(line[x1])) continue;
+          const x2Candidates = findCornerPositions(line, x1 + 1, /[┐╗]/);
+          for (const x2 of x2Candidates) {
+            const bottom = findDiagramBottom(lines, y + 1, x1, x2);
+            if (bottom < 0) continue;
+            const key = `${x1}:${y}:${x2}:${bottom}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const text = [];
+            for (let row = y + 1; row < bottom; row += 1) {
+              text.push((lines[row] || "").slice(x1 + 1, x2).replace(/[│║]/g, " ").trim());
+            }
+            const cleaned = text.filter(Boolean);
+            if (cleaned.length === 0) continue;
+            nodes.push({
+              id: nodes.length,
+              x1,
+              x2,
+              y1: y,
+              y2: bottom,
+              x: Math.round(x1 * charWidth + pad),
+              y: Math.round(y * rowHeight + 6),
+              w: Math.max(118, Math.round((x2 - x1 + 1) * charWidth)),
+              h: Math.max(54, Math.round((bottom - y + 1) * rowHeight - 8)),
+              text: cleaned
+            });
+          }
+        }
+      });
+      return nodes;
+    }
+
+    function findCornerPositions(line, start, pattern) {
+      const positions = [];
+      for (let x = start; x < line.length; x += 1) {
+        if (pattern.test(line[x])) positions.push(x);
+      }
+      return positions;
+    }
+
+    function findDiagramBottom(lines, startY, x1, x2) {
+      for (let y = startY; y < lines.length; y += 1) {
+        const line = lines[y] || "";
+        if (/[└╚]/.test(line[x1] || "") && /[┘╝]/.test(line[x2] || "")) return y;
+      }
+      return -1;
+    }
+
+    function extractDiagramConnectors(lines, nodes, charWidth, rowHeight, pad) {
+      const connectors = [];
+      const byId = new Set();
+      const centers = nodes.map(node => ({
+        ...node,
+        cx: node.x + node.w / 2,
+        cy: node.y + node.h / 2,
+        left: node.x,
+        right: node.x + node.w,
+        top: node.y,
+        bottom: node.y + node.h
+      }));
+
+      for (const left of centers) {
+        for (const right of centers) {
+          if (left.id === right.id || left.right >= right.left) continue;
+          const y = Math.round(((left.y1 + left.y2) / 2 + (right.y1 + right.y2) / 2) / 2);
+          const nearRows = [y - 1, y, y + 1].filter(row => row >= 0 && row < lines.length);
+          const hasArrow = nearRows.some(row => {
+            const segment = (lines[row] || "").slice(left.x2, right.x1 + 1);
+            return /[─═\-]+.*[>→]|[<←].*[─═\-]+|[←→↔]/.test(segment);
+          });
+          if (!hasArrow) continue;
+          const key = `h:${left.id}:${right.id}`;
+          if (byId.has(key)) continue;
+          byId.add(key);
+          const label = findConnectorLabel(lines, nearRows, left.x2, right.x1);
+          connectors.push({
+            kind: "h",
+            x1: left.right,
+            y1: left.cy,
+            x2: right.left,
+            y2: right.cy,
+            label,
+            labelX: (left.right + right.left) / 2,
+            labelY: Math.min(left.cy, right.cy) - 20
+          });
+        }
+      }
+
+      for (const top of centers) {
+        for (const bottom of centers) {
+          if (top.id === bottom.id || top.bottom >= bottom.top) continue;
+          const dx = Math.abs(top.cx - bottom.cx);
+          if (dx > Math.max(top.w, bottom.w) * 0.42) continue;
+          const col = Math.round(((top.x1 + top.x2) / 2 + (bottom.x1 + bottom.x2) / 2) / 2);
+          let hasVertical = false;
+          for (let y = top.y2; y <= bottom.y1; y += 1) {
+            const segment = (lines[y] || "").slice(Math.max(0, col - 2), col + 3);
+            if (/[│║|▼▲]/.test(segment)) {
+              hasVertical = true;
+              break;
+            }
+          }
+          if (!hasVertical) continue;
+          const key = `v:${top.id}:${bottom.id}`;
+          if (byId.has(key)) continue;
+          byId.add(key);
+          connectors.push({
+            kind: "v",
+            x1: top.cx,
+            y1: top.bottom,
+            x2: bottom.cx,
+            y2: bottom.top,
+            label: "",
+            labelX: top.cx,
+            labelY: (top.bottom + bottom.top) / 2
+          });
+        }
+      }
+
+      return connectors;
+    }
+
+    function findConnectorLabel(lines, rows, x1, x2) {
+      for (const row of rows) {
+        const candidates = [row - 1, row + 1, row].filter(index => index >= 0 && index < lines.length);
+        for (const candidate of candidates) {
+          const label = (lines[candidate] || "")
+            .slice(x1, x2)
+            .replace(/[─═<>←→↔│|+\-]/g, " ")
+            .trim();
+          if (/[A-Za-z0-9\u4e00-\u9fa5]/.test(label)) return label.replace(/\s+/g, " ");
+        }
+      }
+      return "";
+    }
+
+    function renderDiagramSvg(connectors, width, height) {
+      const paths = connectors.map(connector => {
+        if (connector.kind === "h") {
+          return `<path d="M ${connector.x1} ${connector.y1} L ${connector.x2} ${connector.y2}" stroke="#3b6ea8" stroke-width="1.8" fill="none" marker-end="url(#arrow)" />`;
+        }
+        const midY = (connector.y1 + connector.y2) / 2;
+        return `<path d="M ${connector.x1} ${connector.y1} L ${connector.x1} ${midY} L ${connector.x2} ${midY} L ${connector.x2} ${connector.y2}" stroke="#3b6ea8" stroke-width="1.8" fill="none" marker-end="url(#arrow)" />`;
+      }).join("");
+      return `<svg class="diagram-svg" viewBox="0 0 ${width} ${height}" aria-hidden="true"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 8 4 L 0 8 z" fill="#3b6ea8"></path></marker></defs>${paths}</svg>`;
+    }
+
+    function syncRowHeights() {
+      const sourceRows = [...sourceLines.querySelectorAll(".line")];
+      const previewRows = [...previewLines.querySelectorAll(".preview-line")];
+      sourceRows.forEach((row, index) => {
+        const previewRow = previewRows[index];
+        if (!previewRow) return;
+        const isAuto = previewRow.classList.contains("auto-height");
+        row.classList.toggle("auto-height", isAuto);
+        const sourceContentHeight = isAuto ? Math.ceil(row.lastElementChild.scrollHeight + 4) : ROW_HEIGHT;
+        const previewHeight = Math.ceil(previewRow.getBoundingClientRect().height);
+        const height = Math.max(ROW_HEIGHT, previewHeight, sourceContentHeight);
+        row.style.height = `${height}px`;
+        previewRow.style.height = `${height}px`;
+      });
+    }
+
+    function buildTableMeta(lines) {
+      const meta = new Map();
+      let index = 0;
+      while (index < lines.length) {
+        if (!isTableLine(lines[index])) {
+          index += 1;
+          continue;
+        }
+
+        const start = index;
+        const rows = [];
+        while (index < lines.length && isTableLine(lines[index])) {
+          rows.push({ index, cells: splitTableCells(lines[index]) });
+          index += 1;
+        }
+
+        if (rows.length < 2 || !isTableSeparatorCells(rows[1].cells)) {
+          continue;
+        }
+
+        const columnCount = Math.max(...rows.map(row => row.cells.length));
+        const widths = Array.from({ length: columnCount }, (_, col) => {
+          const maxLen = Math.max(...rows.map(row => plainCellLength(row.cells[col] || "")), 4);
+          const min = col === 0 ? 10 : 8;
+          const max = col === 0 ? 22 : 20;
+          const widthCh = Math.min(Math.max(maxLen + 2, min), max);
+          return Math.round(widthCh * 8.5 + 18);
+        });
+        const tableCols = widths.map(width => `minmax(${width}px, ${width}px)`).join(" ");
+        const tableMinWidth = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+
+        rows.forEach((row, offset) => {
+          meta.set(row.index, {
+            cells: padCells(row.cells, columnCount),
+            isHeader: offset === 0,
+            isSeparator: isTableSeparatorCells(row.cells),
+            tableCols,
+            tableMinWidth,
+            start
+          });
+        });
+      }
+      return meta;
+    }
+
+    function isTableLine(line) {
+      return /^\s*\|.*\|\s*$/.test(line);
+    }
+
+    function splitTableCells(line) {
+      return line.trim().replace(/^\||\|$/g, "").split("|").map(cell => cell.trim());
+    }
+
+    function padCells(cells, count) {
+      const padded = cells.slice(0, count);
+      while (padded.length < count) padded.push("");
+      return padded;
+    }
+
+    function isTableSeparatorCells(cells) {
+      return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell.trim()));
+    }
+
+    function plainCellLength(cell) {
+      return cell
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/[*_`~]/g, "")
+        .replace(/[^\x00-\xff]/g, "xx")
+        .length;
+    }
+
+    function parseLine(line, state) {
+      const raw = line;
+      const trimmed = raw.trim();
+      if (state.diagram) {
+        return {
+          className: state.diagram.className,
+          html: state.diagram.html,
+          diagramWidth: state.diagram.width,
+          diagramHeight: state.diagram.height
+        };
+      }
+      if (state.inFrontmatter) return { className: "md-frontmatter", html: escapeHtml(raw) };
+      if (!trimmed) return { className: "md-empty", html: "&nbsp;" };
+      if (/^\s*(```|~~~)/.test(raw)) return { className: "md-fence", html: escapeHtml(trimmed) };
+      if (state.inFence) return { className: "md-code", html: escapeHtml(raw) };
+
+      const heading = raw.match(/^\s{0,3}(#{1,6})\s+(.*)$/);
+      if (heading) {
+        const level = heading[1].length;
+        return { className: `md-heading md-h${level}`, html: inlineMarkdown(heading[2]) };
+      }
+
+      const quote = raw.match(/^\s{0,3}>\s?(.*)$/);
+      if (quote) return { className: "md-quote", html: inlineMarkdown(quote[1] || " ") };
+
+      if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(raw)) {
+        return { className: "md-hr", html: "&nbsp;" };
+      }
+
+      const task = raw.match(/^(\s*)[-*+]\s+\[( |x|X)\]\s+(.*)$/);
+      if (task) {
+        const checked = task[2].toLowerCase() === "x";
+        const mark = checked ? "✓" : "";
+        return {
+          className: `md-list md-task${checked ? " md-task-done" : ""}`,
+          html: `${indent(task[1])}<span class="task-box">${mark}</span>${inlineMarkdown(task[3])}`
+        };
+      }
+
+      const unordered = raw.match(/^(\s*)[-*+]\s+(.*)$/);
+      if (unordered) {
+        return { className: "md-list md-unordered", html: `${indent(unordered[1])}<span class="bullet">•</span>${inlineMarkdown(unordered[2])}` };
+      }
+
+      const ordered = raw.match(/^(\s*)(\d+[.)])\s+(.*)$/);
+      if (ordered) {
+        return { className: "md-list md-ordered", html: `${indent(ordered[1])}<span class="ordered-no">${escapeHtml(ordered[2])}</span>${inlineMarkdown(ordered[3])}` };
+      }
+
+      if (state.table) {
+        const html = state.table.cells
+          .map(cell => `<span class="table-cell" title="${escapeAttr(cell)}">${state.table.isSeparator ? "&nbsp;" : inlineMarkdown(cell || " ")}</span>`)
+          .join("");
+        const classes = [
+          "md-table",
+          state.table.isHeader ? "md-table-header" : "",
+          state.table.isSeparator ? "md-table-separator" : ""
+        ].filter(Boolean).join(" ");
+        return {
+          className: classes,
+          html,
+          tableCols: state.table.tableCols,
+          tableMinWidth: state.table.tableMinWidth,
+          autoHeight: !state.table.isSeparator
+        };
+      }
+
+      if (isTableLine(raw)) {
+        const cells = splitTableCells(raw);
+        const html = cells.map(cell => `<span class="table-cell" title="${escapeAttr(cell)}">${inlineMarkdown(cell || " ")}</span>`).join("");
+        return { className: "md-table", html, tableCols: cells.map(() => "minmax(120px, 120px)").join(" "), tableMinWidth: `${Math.max(cells.length, 1) * 120}px`, autoHeight: true };
+      }
+
+      if (/^\s{4,}/.test(raw)) return { className: "md-code", html: escapeHtml(raw) };
+
+      return { className: "md-text", html: inlineMarkdown(raw) };
+    }
+
+    function indent(value) {
+      const count = Math.floor((value || "").replace(/\t/g, "    ").length / 2);
+      return "&nbsp;".repeat(Math.min(count, 8) * 2);
+    }
+
+    function inlineMarkdown(value) {
+      let html = escapeHtml(value);
+      html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<span class="tag image-tag">图片: $1</span>');
+      html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="token-link">$1</span>');
+      html = html.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<span class="token-strong">$1</span>');
+      html = html.replace(/__([^_]+)__/g, '<span class="token-strong">$1</span>');
+      html = html.replace(/\*([^*]+)\*/g, '<span class="token-em">$1</span>');
+      html = html.replace(/_([^_]+)_/g, '<span class="token-em">$1</span>');
+      return html;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#096;");
+    }
+
+    function syncScroll(from, to) {
+      if (syncLock) return;
+      syncLock = true;
+      to.scrollTop = from.scrollTop;
+      to.scrollLeft = from.scrollLeft;
+      requestAnimationFrame(() => {
+        syncLock = false;
+      });
+    }
+
+    sourceBody.addEventListener("scroll", () => syncScroll(sourceBody, previewBody));
+    previewBody.addEventListener("scroll", () => syncScroll(previewBody, sourceBody));
+
+    openFileBtn.addEventListener("click", () => fileInput.click());
+    openFolderBtn.addEventListener("click", openFolder);
+    clearBtn.addEventListener("click", clearAll);
+    toggleSidebarBtn.addEventListener("click", () => workspace.classList.toggle("sidebar-hidden"));
+
+    fileInput.addEventListener("change", event => {
+      const records = Array.from(event.target.files || [])
+        .filter(isMarkdownFile)
+        .map(file => fileRecord(file));
+      setFiles(records);
+      fileInput.value = "";
+    });
+
+    dirInput.addEventListener("change", event => {
+      const records = Array.from(event.target.files || [])
+        .filter(isMarkdownFile)
+        .map(file => fileRecord(file));
+      setFiles(records);
+      dirInput.value = "";
+    });
+
+    async function openFolder() {
+      if (window.showDirectoryPicker) {
+        try {
+          const handle = await window.showDirectoryPicker();
+          const records = await collectHandleFiles(handle);
+          setFiles(records);
+          return;
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+        }
+      }
+      dirInput.click();
+    }
+
+    async function collectHandleFiles(dirHandle, prefix = dirHandle.name) {
+      const records = [];
+      for await (const entry of dirHandle.values()) {
+        if (entry.kind === "file") {
+          const file = await entry.getFile();
+          if (isMarkdownFile(file)) records.push(fileRecord(file, `${prefix}/${file.name}`));
+        } else if (entry.kind === "directory") {
+          records.push(...await collectHandleFiles(entry, `${prefix}/${entry.name}`));
+        }
+      }
+      return records;
+    }
+
+    function isFileDrag(event) {
+      return Array.from(event.dataTransfer?.types || []).includes("Files");
+    }
+
+    function showDropMask() {
+      dragDepth += 1;
+      app.classList.add("drag-over");
+    }
+
+    function hideDropMask(force = false) {
+      dragDepth = force ? 0 : Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) app.classList.remove("drag-over");
+    }
+
+    window.addEventListener("dragenter", event => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      showDropMask();
+    });
+
+    window.addEventListener("dragover", event => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      app.classList.add("drag-over");
+    });
+
+    window.addEventListener("dragleave", event => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      hideDropMask();
+    });
+
+    window.addEventListener("drop", async event => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      hideDropMask(true);
+      const records = await collectDropFiles(event.dataTransfer);
+      setFiles(records);
+    });
+
+    async function collectDropFiles(dataTransfer) {
+      const items = Array.from(dataTransfer.items || []);
+      if (items.length) {
+        const records = [];
+        for (const item of items) {
+          const handle = item.getAsFileSystemHandle ? await item.getAsFileSystemHandle() : null;
+          const entry = !handle && item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+          if (handle) {
+            records.push(...await collectDroppedHandleFiles(handle));
+          } else if (entry) {
+            records.push(...await collectEntryFiles(entry));
+          } else {
+            const file = item.getAsFile();
+            if (file && isMarkdownFile(file)) records.push(fileRecord(file));
+          }
+        }
+        return records;
+      }
+      return Array.from(dataTransfer.files || [])
+        .filter(isMarkdownFile)
+        .map(file => fileRecord(file));
+    }
+
+    async function collectDroppedHandleFiles(handle, prefix = handle.name) {
+      if (handle.kind === "file") {
+        const file = await handle.getFile();
+        return isMarkdownFile(file) ? [fileRecord(file, prefix)] : [];
+      }
+      if (handle.kind !== "directory") return [];
+      const records = [];
+      for await (const entry of handle.values()) {
+        records.push(...await collectDroppedHandleFiles(entry, `${prefix}/${entry.name}`));
+      }
+      return records;
+    }
+
+    function readEntries(reader) {
+      return new Promise((resolve, reject) => {
+        reader.readEntries(resolve, reject);
+      });
+    }
+
+    async function collectEntryFiles(entry, prefix = "") {
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        return isMarkdownFile(file) ? [fileRecord(file, `${prefix}${file.name}`)] : [];
+      }
+
+      if (!entry.isDirectory) return [];
+      const records = [];
+      const reader = entry.createReader();
+      let batch;
+      do {
+        batch = await readEntries(reader);
+        for (const child of batch) {
+          records.push(...await collectEntryFiles(child, `${prefix}${entry.name}/`));
+        }
+      } while (batch.length > 0);
+      return records;
+    }
+
+    function clearAll() {
+      markdownFiles.length = 0;
+      activeId = null;
+      fileTitle.textContent = "拖入 .md 文件或文件夹开始浏览";
+      renderFileList();
+      renderDocument("");
+    }
+
+    let dragging = false;
+
+    resizer.addEventListener("pointerdown", event => {
+      dragging = true;
+      resizer.classList.add("dragging");
+      resizer.setPointerCapture(event.pointerId);
+    });
+
+    resizer.addEventListener("pointermove", event => {
+      if (!dragging) return;
+      const rect = split.getBoundingClientRect();
+      const next = Math.min(Math.max(event.clientX - rect.left, 260), rect.width - 260);
+      split.style.setProperty("--left-w", `${next}px`);
+    });
+
+    resizer.addEventListener("pointerup", event => {
+      dragging = false;
+      resizer.classList.remove("dragging");
+      resizer.releasePointerCapture(event.pointerId);
+    });
+
+    renderDocument("");
+  </script>
+</body>
+</html>

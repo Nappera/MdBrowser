@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Markdown 对齐浏览器</title>
+  <title>md浏览器</title>
   <style>
     :root {
       --bg: #f6f7f9;
@@ -428,6 +428,66 @@
       background-size: 24px 24px, 24px 24px, auto;
     }
 
+    .diagram-flow {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 16px 22px;
+      overflow: auto;
+    }
+
+    .diagram-flow-row {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 22px;
+      min-height: 72px;
+    }
+
+    .diagram-flow .diagram-node {
+      position: relative;
+      left: auto;
+      top: auto;
+      width: 220px;
+      height: auto;
+      min-height: 72px;
+      max-width: 240px;
+    }
+
+    .diagram-flow-connector {
+      position: relative;
+      height: 32px;
+      flex: 0 0 32px;
+    }
+
+    .diagram-flow-connector::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 2px;
+      height: 32px;
+      background: #3b6ea8;
+      transform: translateX(-50%);
+    }
+
+    .diagram-flow-connector::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -1px;
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #3b6ea8;
+      transform: translateX(-50%);
+    }
+
     .diagram-svg {
       position: absolute;
       inset: 0;
@@ -435,10 +495,12 @@
       height: 100%;
       overflow: visible;
       pointer-events: none;
+      z-index: 2;
     }
 
     .diagram-node {
       position: absolute;
+      z-index: 3;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -468,6 +530,7 @@
 
     .diagram-label {
       position: absolute;
+      z-index: 4;
       padding: 1px 6px;
       border-radius: 999px;
       color: #23415f;
@@ -912,7 +975,7 @@
             role: row === start ? "anchor" : "ghost",
             html: row === start ? diagram.html : "&nbsp;",
             width: diagram.width,
-            height: Math.max(diagram.height, blockLength * ROW_HEIGHT),
+            height: `${Math.max(diagram.heightValue, blockLength * ROW_HEIGHT)}px`,
             className: row === start ? "md-diagram md-diagram-anchor" : "md-diagram md-diagram-ghost"
           });
         }
@@ -932,24 +995,64 @@
       const maxLen = Math.max(...lines.map(line => line.length), 1);
       const nodes = extractDiagramNodes(lines, charWidth, rowHeight, pad);
       if (nodes.length === 0) return null;
-      const width = Math.max(Math.ceil(maxLen * charWidth + pad * 2), Math.max(...nodes.map(node => node.x + node.w + pad)));
-      const height = Math.max(lines.length * rowHeight, Math.max(...nodes.map(node => node.y + node.h + pad)));
-      const connectors = extractDiagramConnectors(lines, nodes, charWidth, rowHeight, pad);
-      const svg = renderDiagramSvg(connectors, width, height);
-      const labels = connectors
-        .filter(connector => connector.label)
-        .map(connector => `<span class="diagram-label" style="left:${connector.labelX}px;top:${connector.labelY}px">${escapeHtml(connector.label)}</span>`)
-        .join("");
-      const nodeHtml = nodes.map(node => {
-        const linesHtml = node.text.map(line => `<span class="diagram-node-line" title="${escapeAttr(line)}">${escapeHtml(line)}</span>`).join("");
-        return `<div class="diagram-node" style="left:${node.x}px;top:${node.y}px;width:${node.w}px;height:${node.h}px">${linesHtml}</div>`;
+      const levels = groupDiagramNodes(nodes);
+      const maxColumns = Math.max(...levels.map(level => level.length), 1);
+      const width = Math.max(620, Math.min(1180, maxColumns * 262 + 80), Math.ceil(maxLen * charWidth * 0.72));
+      const height = Math.max(lines.length * rowHeight, levels.length * 104 + Math.max(0, levels.length - 1) * 32 + 32);
+      const nodeHtml = levels.map((level, index) => {
+        const row = level.map(node => {
+          const linesHtml = node.text.map(line => `<span class="diagram-node-line" title="${escapeAttr(line)}">${escapeHtml(line)}</span>`).join("");
+          return `<div class="diagram-node">${linesHtml}</div>`;
+        }).join("");
+        const connector = index < levels.length - 1 ? '<div class="diagram-flow-connector"></div>' : "";
+        return `<div class="diagram-flow-row">${row}</div>${connector}`;
       }).join("");
       return {
         width: `${width}px`,
         height: `${height}px`,
+        heightValue: height,
         nodes,
-        html: `<div class="diagram-canvas">${svg}${labels}${nodeHtml}</div>`
+        html: `<div class="diagram-canvas"><div class="diagram-flow">${nodeHtml}</div></div>`
       };
+    }
+
+    function groupDiagramNodes(nodes) {
+      const sorted = [...nodes].sort((a, b) => a.y1 - b.y1 || a.x1 - b.x1);
+      const levels = [];
+      for (const node of sorted) {
+        let level = levels.find(item => Math.abs(item.anchor - node.y1) <= 3);
+        if (!level) {
+          level = { anchor: node.y1, nodes: [] };
+          levels.push(level);
+        }
+        level.nodes.push(node);
+      }
+      return levels
+        .sort((a, b) => a.anchor - b.anchor)
+        .map(level => level.nodes.sort((a, b) => a.x1 - b.x1));
+    }
+
+    function extractDiagramLabels(lines, nodes, charWidth, rowHeight, pad) {
+      const labels = [];
+      const nodeTexts = nodes.map(node => node.text.join(" "));
+      const textPattern = /[A-Za-z0-9\u4e00-\u9fa5][A-Za-z0-9 ._/（）()：:\-\u4e00-\u9fa5]{2,}/g;
+      lines.forEach((line, y) => {
+        for (const match of line.matchAll(textPattern)) {
+          const text = match[0].trim().replace(/\s+/g, " ");
+          if (!/[A-Za-z0-9\u4e00-\u9fa5]/.test(text)) continue;
+          if (nodeTexts.some(nodeText => nodeText.includes(text))) continue;
+          const x1 = match.index;
+          const x2 = match.index + match[0].length;
+          const insideNode = nodes.some(node => y >= node.y1 && y <= node.y2 && x1 >= node.x1 && x2 <= node.x2);
+          if (insideNode) continue;
+          labels.push({
+            text,
+            x: Math.round((x1 + x2) * charWidth / 2 + pad),
+            y: Math.round(y * rowHeight + rowHeight / 2)
+          });
+        }
+      });
+      return labels;
     }
 
     function extractDiagramNodes(lines, charWidth, rowHeight, pad) {
@@ -960,14 +1063,18 @@
           if (!/[┌╔]/.test(line[x1])) continue;
           const x2Candidates = findCornerPositions(line, x1 + 1, /[┐╗]/);
           for (const x2 of x2Candidates) {
-            const bottom = findDiagramBottom(lines, y + 1, x1, x2);
-            if (bottom < 0) continue;
+            if (/[┼┬┴]/.test(line.slice(x1, x2 + 1))) continue;
+            const bottomInfo = findDiagramBottom(lines, y + 1, x1, x2);
+            if (!bottomInfo) continue;
+            const bottom = bottomInfo.y;
+            const contentX1 = bottomInfo.x1;
+            const contentX2 = bottomInfo.x2;
             const key = `${x1}:${y}:${x2}:${bottom}`;
             if (seen.has(key)) continue;
             seen.add(key);
             const text = [];
             for (let row = y + 1; row < bottom; row += 1) {
-              text.push((lines[row] || "").slice(x1 + 1, x2).replace(/[│║]/g, " ").trim());
+              text.push(extractDiagramCellText(lines[row] || "", contentX1, contentX2));
             }
             const cleaned = text.filter(Boolean);
             if (cleaned.length === 0) continue;
@@ -983,10 +1090,31 @@
               h: Math.max(54, Math.round((bottom - y + 1) * rowHeight - 8)),
               text: cleaned
             });
+            break;
           }
         }
       });
       return nodes;
+    }
+
+    function extractDiagramCellText(line, x1, x2) {
+      const verticals = [];
+      for (let index = 0; index < line.length; index += 1) {
+        if (/[│║|]/.test(line[index])) verticals.push(index);
+      }
+      const center = (x1 + x2) / 2;
+      const segments = [];
+      for (let index = 0; index < verticals.length - 1; index += 1) {
+        const start = verticals[index];
+        const end = verticals[index + 1];
+        const raw = line.slice(start + 1, end).trim();
+        if (!raw) continue;
+        segments.push({ raw, center: (start + end) / 2 });
+      }
+      if (segments.length > 0) {
+        return segments.sort((a, b) => Math.abs(a.center - center) - Math.abs(b.center - center))[0].raw;
+      }
+      return line.slice(x1 + 1, x2).replace(/[│║|]/g, " ").trim();
     }
 
     function findCornerPositions(line, start, pattern) {
@@ -1000,9 +1128,15 @@
     function findDiagramBottom(lines, startY, x1, x2) {
       for (let y = startY; y < lines.length; y += 1) {
         const line = lines[y] || "";
-        if (/[└╚]/.test(line[x1] || "") && /[┘╝]/.test(line[x2] || "")) return y;
+        const lefts = findCornerPositions(line, Math.max(0, x1 - 4), /[└╚]/).filter(pos => Math.abs(pos - x1) <= 6);
+        const rights = findCornerPositions(line, Math.max(0, x2 - 8), /[┘╝]/).filter(pos => Math.abs(pos - x2) <= 10 || pos > x1);
+        if (lefts.length && rights.length) {
+          const left = lefts.sort((a, b) => Math.abs(a - x1) - Math.abs(b - x1))[0];
+          const right = rights.filter(pos => pos > left).sort((a, b) => Math.abs(a - x2) - Math.abs(b - x2))[0];
+          if (right !== undefined) return { y, x1: left, x2: right };
+        }
       }
-      return -1;
+      return null;
     }
 
     function extractDiagramConnectors(lines, nodes, charWidth, rowHeight, pad) {
@@ -1018,76 +1152,118 @@
         bottom: node.y + node.h
       }));
 
-      for (const left of centers) {
-        for (const right of centers) {
-          if (left.id === right.id || left.right >= right.left) continue;
-          const y = Math.round(((left.y1 + left.y2) / 2 + (right.y1 + right.y2) / 2) / 2);
-          const nearRows = [y - 1, y, y + 1].filter(row => row >= 0 && row < lines.length);
-          const hasArrow = nearRows.some(row => {
-            const segment = (lines[row] || "").slice(left.x2, right.x1 + 1);
-            return /[─═\-]+.*[>→]|[<←].*[─═\-]+|[←→↔]/.test(segment);
-          });
-          if (!hasArrow) continue;
-          const key = `h:${left.id}:${right.id}`;
-          if (byId.has(key)) continue;
-          byId.add(key);
-          const label = findConnectorLabel(lines, nearRows, left.x2, right.x1);
-          connectors.push({
-            kind: "h",
-            x1: left.right,
-            y1: left.cy,
-            x2: right.left,
-            y2: right.cy,
-            label,
-            labelX: (left.right + right.left) / 2,
-            labelY: Math.min(left.cy, right.cy) - 20
-          });
-        }
-      }
+      extractHorizontalArrowRuns(lines).forEach(run => {
+        const leftNode = nearestNodeLeft(centers, run);
+        const rightNode = nearestNodeRight(centers, run);
+        if (!leftNode || !rightNode || leftNode.id === rightNode.id) return;
+        const key = `h:${Math.min(leftNode.id, rightNode.id)}:${Math.max(leftNode.id, rightNode.id)}:${run.y}`;
+        if (byId.has(key)) return;
+        byId.add(key);
+        const y = Math.round(run.y * rowHeight + rowHeight / 2);
+        const label = findConnectorLabel(lines, [run.y], Math.min(leftNode.x2, rightNode.x2), Math.max(leftNode.x1, rightNode.x1));
+        connectors.push({
+          kind: "h",
+          x1: leftNode.right,
+          y1: y,
+          x2: rightNode.left,
+          y2: y,
+          label,
+          labelX: (leftNode.right + rightNode.left) / 2,
+          labelY: y - 24
+        });
+      });
 
-      for (const top of centers) {
-        for (const bottom of centers) {
-          if (top.id === bottom.id || top.bottom >= bottom.top) continue;
-          const dx = Math.abs(top.cx - bottom.cx);
-          if (dx > Math.max(top.w, bottom.w) * 0.42) continue;
-          const col = Math.round(((top.x1 + top.x2) / 2 + (bottom.x1 + bottom.x2) / 2) / 2);
-          let hasVertical = false;
-          for (let y = top.y2; y <= bottom.y1; y += 1) {
-            const segment = (lines[y] || "").slice(Math.max(0, col - 2), col + 3);
-            if (/[│║|▼▲]/.test(segment)) {
-              hasVertical = true;
-              break;
-            }
-          }
-          if (!hasVertical) continue;
-          const key = `v:${top.id}:${bottom.id}`;
-          if (byId.has(key)) continue;
-          byId.add(key);
-          connectors.push({
-            kind: "v",
-            x1: top.cx,
-            y1: top.bottom,
-            x2: bottom.cx,
-            y2: bottom.top,
-            label: "",
-            labelX: top.cx,
-            labelY: (top.bottom + bottom.top) / 2
-          });
-        }
-      }
+      extractVerticalArrowRuns(lines).forEach(run => {
+        const topNode = nearestNodeAbove(centers, run);
+        const bottomNode = nearestNodeBelow(centers, run);
+        if (!topNode || !bottomNode || topNode.id === bottomNode.id) return;
+        const key = `v:${topNode.id}:${bottomNode.id}:${run.x}`;
+        if (byId.has(key)) return;
+        byId.add(key);
+        const x = Math.round(run.x * charWidth + pad);
+        connectors.push({
+          kind: "v",
+          x1: x,
+          y1: topNode.bottom,
+          x2: x,
+          y2: bottomNode.top,
+          label: "",
+          labelX: x,
+          labelY: (topNode.bottom + bottomNode.top) / 2
+        });
+      });
 
       return connectors;
     }
 
+    function extractHorizontalArrowRuns(lines) {
+      const runs = [];
+      lines.forEach((line, y) => {
+        const pattern = /[<←◄]?[─═\-]{3,}[>→►]?|[<←◄][─═\-]{2,}|[─═\-]{2,}[>→►]/g;
+        for (const match of line.matchAll(pattern)) {
+          runs.push({ y, x1: match.index, x2: match.index + match[0].length, text: match[0] });
+        }
+      });
+      return runs;
+    }
+
+    function extractVerticalArrowRuns(lines) {
+      const runs = [];
+      const maxLen = Math.max(...lines.map(line => line.length), 0);
+      for (let x = 0; x < maxLen; x += 1) {
+        let y = 0;
+        while (y < lines.length) {
+          while (y < lines.length && !/[│║|▼▲]/.test((lines[y] || "")[x] || "")) y += 1;
+          const start = y;
+          while (y < lines.length && /[│║|▼▲\s]/.test((lines[y] || "")[x] || "")) {
+            if (/[│║|▼▲]/.test((lines[y] || "")[x] || "")) y += 1;
+            else break;
+          }
+          const end = y;
+          if (end - start >= 2 || /[▼▲]/.test((lines[end - 1] || "")[x] || "")) {
+            runs.push({ x, y1: start, y2: end });
+          }
+        }
+      }
+      return runs;
+    }
+
+    function nearestNodeLeft(nodes, run) {
+      return nodes
+        .filter(node => node.x2 <= run.x1 + 1 && run.y >= node.y1 && run.y <= node.y2)
+        .sort((a, b) => b.x2 - a.x2)[0] || null;
+    }
+
+    function nearestNodeRight(nodes, run) {
+      return nodes
+        .filter(node => node.x1 >= run.x2 - 1 && run.y >= node.y1 && run.y <= node.y2)
+        .sort((a, b) => a.x1 - b.x1)[0] || null;
+    }
+
+    function nearestNodeAbove(nodes, run) {
+      return nodes
+        .filter(node => node.y2 <= run.y1 && run.x >= node.x1 && run.x <= node.x2)
+        .sort((a, b) => b.y2 - a.y2)[0] || null;
+    }
+
+    function nearestNodeBelow(nodes, run) {
+      return nodes
+        .filter(node => node.y1 >= run.y2 - 1 && run.x >= node.x1 && run.x <= node.x2)
+        .sort((a, b) => a.y1 - b.y1)[0] || null;
+    }
+
     function findConnectorLabel(lines, rows, x1, x2) {
-      for (const row of rows) {
-        const candidates = [row - 1, row + 1, row].filter(index => index >= 0 && index < lines.length);
-        for (const candidate of candidates) {
-          const label = (lines[candidate] || "")
-            .slice(x1, x2)
-            .replace(/[─═<>←→↔│|+\-]/g, " ")
-            .trim();
-          if (/[A-Za-z0-9\u4e00-\u9fa5]/.test(label)) return label.replace(/\s+/g, " ");
+      const center = rows.length ? rows[Math.floor(rows.length / 2)] : 0;
+      const candidates = lines
+        .map((_, index) => index)
+        .sort((a, b) => Math.abs(a - center) - Math.abs(b - center));
+      for (const candidate of candidates) {
+        const label = (lines[candidate] || "")
+          .slice(x1, x2)
+          .replace(/[─═<>←→↔│|+\-┌┐└┘]/g, " ")
+          .trim();
+        if (/[A-Za-z0-9\u4e00-\u9fa5]/.test(label)) {
+          return label.replace(/\s+/g, " ");
         }
       }
       return "";
